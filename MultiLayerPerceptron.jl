@@ -1,25 +1,25 @@
 type NeuralNetwork
-  layer_neuron_nums::Array{Number,1}
-  input_num::Number
-  output_num::Number
-  length_hidden_layers::Number
-  length_layers::Number
-  bias::Number
-  learningRate::Number
-  neurons_act_values::Array{Array{Number},1}
-  neurons_grad_values::Array{Array{Number},1}
-  neurons_weights::Array{Array{Number},1}
+  layer_neuron_nums::Array{Int8,1}
+  input_num::Int8
+  output_num::Int8
+  length_hidden_layers::Int8
+  length_layers::Int8
+  bias::Float16
+  learningRate::Float16
+  neurons_act_values::Array{Array{Float64},1}
+  neurons_grad_values::Array{Array{Float64},1}
+  neurons_weights::Array{Array{Float64},1}
   function NeuralNetwork()
     new([],0,0,0,0,0,0,[],[],[])
   end
 end
 
-function initNeuralNet(m::NeuralNetwork,input_num, output_num, length_hidden_layers)
+function init_neuralnet!(m::NeuralNetwork,input_num, output_num, length_hidden_layers)
   m.input_num = input_num
   m.output_num = output_num
   m.length_hidden_layers = length_hidden_layers
-  m.bias = 1
-  m.learningRate = 0.15
+  m.bias = 1.0
+  m.learningRate = 0.08
 
   # 바이어스를 추가한 뉴런 개수를 레이어별로 계산한다.
   m.length_layers = m.length_hidden_layers + 2
@@ -44,12 +44,12 @@ function initNeuralNet(m::NeuralNetwork,input_num, output_num, length_hidden_lay
   end
 end
 
-function getAvtivate(m::NeuralNetwork, x)
+function get_acvtivate(m::NeuralNetwork, x)
   # activation 함수는 ReLU를 사용한다.
   max(0.0, x)
 end
 
-function getActGrad(m::NeuralNetwork, x)
+function get_actgrad(m::NeuralNetwork, x)
   if x > 0.0
     return 1.0
   else
@@ -57,22 +57,22 @@ function getActGrad(m::NeuralNetwork, x)
   end
 end
 
-function feedForward(m::NeuralNetwork)
+function feed_forward!(m::NeuralNetwork)
   # 각 레이어의 뉴런를 실행해서 값을 출력한다.
   for i in 1:length(m.neurons_weights)
     m.neurons_act_values[i+1] = m.neurons_weights[i] * m.neurons_act_values[i]
     for j in 1:length(m.neurons_act_values[i+1])-1
-      m.neurons_act_values[i+1][j] = getAvtivate(m,m.neurons_act_values[i+1][j])
+      m.neurons_act_values[i+1][j] = get_acvtivate(m,m.neurons_act_values[i+1][j])
     end
   end
 end
 
-function feedBackward(m::NeuralNetwork, target)
+function feed_backward!(m::NeuralNetwork, target)
   # calculate gradients of output layer
   # 학습 target값과 출력값의 차이를 출력 레이어 gradient에 입력한다.
   l = length(m.neurons_grad_values)
   for d in 1:length(m.neurons_grad_values[l])-1
-    m.neurons_grad_values[l][d] = (target[d] - m.neurons_act_values[l][d]) * getActGrad(m,m.neurons_act_values[l][d])
+    m.neurons_grad_values[l][d] = (target[d] - m.neurons_act_values[l][d]) * get_actgrad(m,m.neurons_act_values[l][d])
     # skips last component (bias)
   end
 
@@ -81,7 +81,7 @@ function feedBackward(m::NeuralNetwork, target)
   for l in length(m.neurons_weights):-1:2
     m.neurons_grad_values[l] = transpose(m.neurons_weights[l]) * m.neurons_grad_values[l+1]
     for d in 1:length(m.neurons_grad_values[l])-1
-      m.neurons_grad_values[l][d] = m.neurons_grad_values[l][d] * getActGrad(m,m.neurons_act_values[l][d])
+      m.neurons_grad_values[l][d] = m.neurons_grad_values[l][d] * get_actgrad(m,m.neurons_act_values[l][d])
     end
   end
 
@@ -96,13 +96,13 @@ function feedBackward(m::NeuralNetwork, target)
   end
 end
 
-function setInputs(m::NeuralNetwork, inputs)
+function set_inputs!(m::NeuralNetwork, inputs)
   for i in 1:m.input_num
     m.neurons_act_values[1][i] = inputs[i]
   end
 end
 
-function getOutputs(m::NeuralNetwork)
+function get_outputs(m::NeuralNetwork)
   output_value = []
   for i in 1:m.output_num
     append!(output_value, m.neurons_act_values[length(m.neurons_act_values)][i])
@@ -110,32 +110,42 @@ function getOutputs(m::NeuralNetwork)
   return output_value
 end
 
-function main()
-  nn = NeuralNetwork()
-  initNeuralNet(nn,2,1,1)
-  #input_x = [[0.0,0.0],[0.0,1.0],[1.0,0.0],[1.0,1.0]]
-  #train_y = [[0],[1],[1],[0]]
-  #현재 정확한 원인을 알수없으나 XOR 학습이 잘 안된다.
-  #예제 C++ 코드에서 정상작동 하는 것으로 보인다. 변수가 overflow되거나 값이 씹히는 것 같다. 추적해서 알아낸다.
+function get_nn_weight(m::NeuralNetwork)
+  m.neurons_weights
+end
+function set_nn_weight!(m::NeuralNetwork, weights)
+  m.neurons_weights = weights
+end
 
-  input_x = [[1.0,1.0]]
-  train_y = [[3]]
-  for i in 1:100 # 학습 횟수 100회
+#--------------------------------------------------------
+# Neural Network test code
+# 반복문을 실행시켜 학습시키는 과정을 단계별로 나누어서 테스트 한다.
+#--------------------------------------------------------
+function train_neuralnetwork!(m::NeuralNetwork)
+  for i in 1:100000 # 학습 횟수 100회
     for j in 1:length(input_x)
-      setInputs(nn,input_x[j])
-      feedForward(nn)
-      feedBackward(nn,train_y[j])
+      set_inputs!(m,input_x[j])
+      feed_forward!(m)
+      feed_backward!(m,train_y[j])
     end
   end
-
   # 학습시킨대로 출력이 나오는지 테스트한다.
   for j in 1:length(input_x)
-    setInputs(nn,input_x[j])
-    feedForward(nn)
-    println("*outputs = ",getOutputs(nn))
-    println("***act ",nn.neurons_act_values)
-    println("***grad ",nn.neurons_grad_values)
-    println("***weights ",nn.neurons_weights)
+    set_inputs!(m,input_x[j])
+    feed_forward!(m)
+    println("*outputs = ",get_outputs(m))
+    #println("***act ",m.neurons_act_values)
+    #println("***grad ",m.neurons_grad_values)
+    #println("***weights ",m.neurons_weights)
   end
 end
-main()
+
+nn = NeuralNetwork()
+#input_x = [[0.0,0.0]]
+#train_y = [[0.3]]
+input_x = [[0.0,0.0],[0.0,1.0],[1.0,0.0],[1.0,1.0]]
+train_y = [[0],[1],[1],[0]]
+#현재 XOR 학습이 잘 안된다. 10번 중 1~2번 성공.
+#변수가 overflow되거나 계산이 엉키는 것 같다. 추적해서 개선한다.
+init_neuralnet!(nn,2,1,2)
+train_neuralnetwork!(nn)
